@@ -1,0 +1,97 @@
+#code
+#define BLYNK_TEMPLATE_ID "TMPL3DS5xQ9ND"
+#define BLYNK_TEMPLATE_NAME "AD"
+#define BLYNK_AUTH_TOKEN "L3bToFUwNIc2QllGR3e3mlIDEY1Cm65l"
+#include <Wire.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <DHT.h> // Include the DHT library
+
+#define sensorPin 33 // Soil moisture sensor pin
+#define solenoidPin 2 // Solenoid valve pin
+#define buzzerPin 14 // Buzzer pin
+#define DHTPIN 15    // DHT sensor pin
+#define DHTTYPE DHT22   // DHT sensor type (change to DHT11 if you're using that model)
+
+DHT dht(DHTPIN, DHTTYPE); // Initialize the DHT sensor
+
+int air = 4095;
+int water = 2300;
+
+// Enter your Auth token
+char auth[] = BLYNK_AUTH_TOKEN;
+
+// Enter your WIFI SSID and password
+char ssid[] = "iQOO 11";
+char pass[] ="00000000";
+
+bool isPumpOn = false; // Track pump state
+
+void setup() {
+  // Debug console
+  Serial.begin(115200);
+  
+  // Initialize Blynk
+  Blynk.begin(auth, ssid, pass, "blynk.cloud", 80);
+
+  // Initialize DHT sensor
+  dht.begin();
+
+  // Set solenoid and buzzer pins as output
+  pinMode(solenoidPin, OUTPUT);
+  pinMode(buzzerPin, OUTPUT);
+}
+
+// Function to read soil moisture sensor values
+void soilMoisture() {
+  int value = analogRead(sensorPin);
+  value = map(value, air, water, 0, 100);
+  Blynk.virtualWrite(V7, value); // Write soil moisture value to Blynk
+  Serial.println("Soil Moisture: " + String(value) + "%");
+
+  // Control solenoid valve and buzzer based on moisture level
+  if (value < 40 && !isPumpOn) { // Check if moisture is less than 40 and pump is off
+    digitalWrite(solenoidPin, LOW); // Turn on solenoid valve
+    digitalWrite(buzzerPin, HIGH);   // Turn on buzzer
+    delay(5000);
+    digitalWrite(buzzerPin, LOW);
+    // Blynk.notify("Pump is turned ON!"); // Send notification
+    isPumpOn = true;
+  } else if (value >= 85 && isPumpOn) { // Check if moisture is greater than or equal to 90 and pump is on
+    digitalWrite(solenoidPin, HIGH);  // Turn off solenoid valve
+    digitalWrite(buzzerPin, LOW);    // Turn off buzzer
+    // Blynk.notify("Pump is turned OFF!"); // Send notification
+    isPumpOn = false;
+  }
+}
+
+
+// Function to read DHT sensor values
+void readDHT() {
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature(); // Read temperature in Celsius
+  
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  // Send temperature and humidity values to Blynk
+  Blynk.virtualWrite(V5, temperature); // V5 is for temperature
+  Blynk.virtualWrite(V6, humidity);    // V6 is for humidity
+
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C, Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+}
+
+void loop() {
+  Blynk.run(); // Run the Blynk library
+  soilMoisture(); // Read soil moisture values
+  readDHT(); // Read DHT sensor values
+
+  delay(1000); // Delay for stability
+}
+
